@@ -38,6 +38,9 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
+    if (!verify_MNNPackedMatMul_int8_case("remain tail blockId", 13, 16, 1, true)) {
+        return 1;
+    }
 
     for (int i = 0; i < warmup; ++i) {
         if (mode == 0) {

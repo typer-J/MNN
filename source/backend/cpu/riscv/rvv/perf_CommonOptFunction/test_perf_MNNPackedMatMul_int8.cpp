@@ -51,6 +51,52 @@ static void MNNPackedMatMul_int8_scalar(float* C, const float* A, const float* B
     MNNPackedMatMulRemain_int8_scalar_impl(C, A, B, 16, parameter, postParameters, bias, 16, k, b);
 }
 
+static bool verify_MNNPackedMatMul_int8_case(const char* name, size_t eSize, int aStride, int blockId, bool remain) {
+    constexpr size_t L = 37;
+    constexpr size_t H = 19;
+    size_t parameter[7] = {static_cast<size_t>(aStride) * sizeof(float), L, H, H * 4 * sizeof(float), 0, 7,
+                           static_cast<size_t>(blockId)};
+    float postParams[4] = {0.0f, 0.0f, -10000.0f, 10000.0f};
+    const size_t hC4 = UP_DIV(H, 4);
+    const size_t ASize = static_cast<size_t>(aStride) * L;
+    const size_t BSize = hC4 * (4 * L + parameter[5]);
+    const size_t CSize = hC4 * (parameter[3] / sizeof(float));
+
+    uint64_t seed = 0x9a7c0001ULL + static_cast<uint64_t>(eSize + blockId + remain);
+    std::vector<float> A(ASize), ref(CSize), out(CSize), bias(hC4 * 4), k(hC4 * 4), b(hC4 * 4);
+    std::vector<int8_t> B(BSize);
+    for (auto& x : A) x = perf_uniform_float(seed, -1.0f, 1.0f);
+    for (auto& x : B) x = perf_uniform_i8(seed);
+    for (auto& x : bias) x = perf_uniform_float(seed, -1.0f, 1.0f);
+    for (auto& x : k) x = perf_uniform_float(seed, 0.001f, 0.05f);
+    for (auto& x : b) x = perf_uniform_float(seed, -0.2f, 0.2f);
+    for (size_t i = 0; i < CSize; ++i) {
+        const float initial = perf_uniform_float(seed, -2.0f, 2.0f);
+        ref[i] = initial;
+        out[i] = initial;
+    }
+
+    if (remain) {
+        MNNPackedMatMulRemain_int8_scalar_impl(ref.data(), A.data(), reinterpret_cast<const float*>(B.data()), eSize,
+                                               parameter, postParams, bias.data(), aStride, k.data(), b.data());
+        MNNPackedMatMulRemain_int8(out.data(), A.data(), reinterpret_cast<const float*>(B.data()), eSize, parameter,
+                                   postParams, bias.data(), k.data(), b.data());
+    } else {
+        MNNPackedMatMul_int8_scalar(ref.data(), A.data(), reinterpret_cast<const float*>(B.data()), parameter,
+                                    postParams, bias.data(), k.data(), b.data());
+        MNNPackedMatMul_int8(out.data(), A.data(), reinterpret_cast<const float*>(B.data()), parameter, postParams,
+                             bias.data(), k.data(), b.data());
+    }
+
+    for (size_t i = 0; i < CSize; ++i) {
+        if (!perf_close(ref[i], out[i], 1e-3f)) {
+            std::fprintf(stderr, "%s verify failed at %zu: scalar=%f rvv=%f\n", name, i, ref[i], out[i]);
+            return false;
+        }
+    }
+    return true;
+}
+
 #ifndef PERF_MATMUL_HELPERS_ONLY
 int main(int argc, char** argv) {
     const int mode = perf_mode(argc, argv);
@@ -88,6 +134,9 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "verify failed at %zu: scalar=%f rvv=%f\n", i, ref[i], out[i]);
             return 1;
         }
+    }
+    if (!verify_MNNPackedMatMul_int8_case("packed blockId", 16, 16, 1, false)) {
+        return 1;
     }
 
     auto fn = mode == 0 ? MNNPackedMatMul_int8_scalar : MNNPackedMatMul_int8;

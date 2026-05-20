@@ -10,6 +10,23 @@ static void MNNAccumulateSequenceNumber_scalar(float* dst, const float* src, int
     *dst = sum;
 }
 
+static bool verify_accumulate_case(int size, uint64_t& seed) {
+    std::vector<float> src(size > 0 ? size : 1);
+    for (int i = 0; i < size; ++i) {
+        src[i] = perf_uniform_float(seed, -10.0f, 10.0f);
+    }
+    float ref = 0.0f;
+    float out = 0.0f;
+    MNNAccumulateSequenceNumber_scalar(&ref, src.data(), size);
+    MNNAccumulateSequenceNumber(&out, src.data(), size);
+    const float eps = 1e-2f * std::max(size, 1) / 1024.0f + 1e-5f;
+    if (!perf_close(ref, out, eps)) {
+        std::fprintf(stderr, "verify failed for size=%d: scalar=%f rvv=%f\n", size, ref, out);
+        return false;
+    }
+    return true;
+}
+
 int main(int argc, char** argv) {
     const int mode = perf_mode(argc, argv);
     if (mode < 0) {
@@ -23,6 +40,11 @@ int main(int argc, char** argv) {
     std::vector<float> src(size);
     for (auto& x : src) {
         x = perf_uniform_float(seed, -10.0f, 10.0f);
+    }
+
+    if (!verify_accumulate_case(0, seed) || !verify_accumulate_case(3, seed) ||
+        !verify_accumulate_case(1009, seed)) {
+        return 1;
     }
 
     float ref = 0.0f;

@@ -45,6 +45,26 @@ int main(int argc, char** argv) {
         }
     }
 
+    {
+        constexpr size_t tailDepth = 7;
+        constexpr size_t tailRealSize = 1031;
+        constexpr int tailPack = 16;
+        const size_t tailTotal = tailDepth * tailRealSize * tailPack;
+        std::vector<float> tailSrc(tailTotal);
+        std::vector<float> tailRef(tailRealSize), tailOut(tailRealSize);
+        for (auto& x : tailSrc) {
+            x = perf_uniform_float(seed, -100.0f, 100.0f);
+        }
+        MNNAbsMaxFP32_scalar(tailSrc.data(), tailRef.data(), tailDepth, tailRealSize, tailPack);
+        MNNAbsMaxFP32(tailSrc.data(), tailOut.data(), tailDepth, tailRealSize, tailPack);
+        for (size_t i = 0; i < tailRealSize; ++i) {
+            if (!perf_close(tailRef[i], tailOut[i], 1e-5f)) {
+                std::fprintf(stderr, "tail verify failed at %zu: scalar=%f rvv=%f\n", i, tailRef[i], tailOut[i]);
+                return 1;
+            }
+        }
+    }
+
     auto fn = mode == 0 ? MNNAbsMaxFP32_scalar : MNNAbsMaxFP32;
     for (int i = 0; i < warmup; ++i) {
         fn(src.data(), out.data(), depth, realSize, pack);
