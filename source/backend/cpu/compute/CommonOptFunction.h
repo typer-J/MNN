@@ -305,6 +305,13 @@ struct CoreFunctions {
     void(*MNNDynamicUpdateConvBiasScale)(float* newbias, float* oldbias, float* weightKernelSum, float* inputZero, size_t ocQuad);
     void(*MNNAsyQuantInfo)(float* scale, float* bias, float* qscale, float* qbias, float* dstMin, float* dstMax, const float* src, const size_t* info);
     void(*MNNAsyQuantFunc)(int8_t* dst, const float* src, float* qscale, float* qbias, const size_t* info);
+    void(*MNNUnpackConvScaleFromBuffer)(float* scaleBuffer, const int8_t* srcbuffer, const int32_t* info,
+                                        int infoBytes) = nullptr;
+    void(*MNNConvInt8ComputeBiasFloat)(float* dst, const int32_t* bias, const float* weightScale, float scaleRatio,
+                                       size_t size) = nullptr;
+    void(*MNNConvInt8ComputeWeightKernelSum)(int* kernelSum, int32_t* bias, const int8_t* weight, int kernelNum,
+                                             int kernelSize, const float* scale, const float* weightBias,
+                                             bool compensateSseOffset) = nullptr;
     typedef void(*MNNPackedMatMulKernel)(float* C, const float* A, const float* B, const size_t* parameter, const float* postParameters, const float* bias);
 
     MNNPackedMatMulKernel MNNPackedMatMulOC16Functions[InputTileMax] = {0};
@@ -430,6 +437,10 @@ struct CoreFunctions {
     void(*MNNAttenPackAndScaleSingleHead)(float* dst, const float* srcHeadBase, size_t srcRowStride, const float* scale, const int32_t* units, size_t seqLen, size_t headDim);
     void(*MNNFlashAttentionUpdateBlockOutput)(float* dst, float* src, float* scale, float* normalizeScale, int depthQuad, int plane, int pack, int idx, int kvBlocks, int size, int bytes, int seqStart);
     void(*MNNSoftmax)(float* softmaxDst, const float* input, float* runningMax, float* runningSum, float* updateScale, int outside, int reduceSize, int kvSeqOffset, int validOffset, int pack, bool mask);
+    void(*MNNAttentionMaskQK)(float* qkPacked, const float* scale, size_t seqLen, size_t processedKvSeq, int pack,
+                              int kvSeqLen, int kvoffset, int padKvSeqLen, const float* sinksPtr,
+                              const float* maskPtr, size_t maskElementSize, bool quantKey,
+                              bool isLowerTriangular) = nullptr;
     void(*MNNQuantAttentionKey)(int8_t* dst, const float* source, float* sumKey, float* maxKey, int32_t* params);
     void(*MNNQuantAttentionValue)(int8_t* dst, const float* source, float* valueQuantInfo, int32_t* params);
 

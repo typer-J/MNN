@@ -52,6 +52,25 @@ extern void MNNSumByAxisLForMatmul_A_RVV(float* dest, int8_t* source, const floa
                                          ssize_t realDstCount, SumByAxisParams sumParams);
 extern void MNNSumWeightInt8_RVV(float* kernelsum, int8_t* source, size_t outside, size_t reduceAxis, size_t hP,
                                  size_t lP);
+extern void MNNUnpackConvScaleFromBuffer_RVV(float* scaleBuffer, const int8_t* srcbuffer, const int32_t* info,
+                                             int infoBytes);
+extern void MNNConvInt8ComputeBiasFloat_RVV(float* dst, const int32_t* bias, const float* weightScale,
+                                            float scaleRatio, size_t size);
+extern void MNNConvInt8ComputeWeightKernelSum_RVV(int* kernelSum, int32_t* bias, const int8_t* weight,
+                                                  int kernelNum, int kernelSize, const float* scale,
+                                                  const float* weightBias, bool compensateSseOffset);
+#ifdef MNN_SUPPORT_TRANSFORMER_FUSE
+extern void MNNAttenPackAndScaleSingleHead_RVV(float* dst, const float* srcHeadBase, size_t srcRowStride,
+                                               const float* scale, const int32_t* units, size_t seqLen,
+                                               size_t headDim);
+extern void MNNFlashAttentionUpdateBlockOutput_RVV(float* dst, float* src, float* scale, float* normalizeScale,
+                                                   int depthQuad, int plane, int pack, int idx, int kvBlocks,
+                                                   int size, int bytes, int seqStart);
+extern void MNNAttentionMaskQK_RVV(float* qkPacked, const float* scale, size_t seqLen, size_t processedKvSeq,
+                                   int pack, int kvSeqLen, int kvoffset, int padKvSeqLen, const float* sinksPtr,
+                                   const float* maskPtr, size_t maskElementSize, bool quantKey,
+                                   bool isLowerTriangular);
+#endif
 #endif
 
 #ifndef MNN_USE_SSE
@@ -4965,6 +4984,14 @@ void MNNCoreFunctionInit() {
         gCoreFunction->MNNSumByAxisLForMatmul_A = MNNSumByAxisLForMatmul_A_RVV;
         gCoreFunction->MNNReorderWeightInt4 = MNNReorderWeightInt4_RVV;
         gCoreFunction->MNNSumWeightInt8 = MNNSumWeightInt8_RVV;
+        gCoreFunction->MNNUnpackConvScaleFromBuffer = MNNUnpackConvScaleFromBuffer_RVV;
+        gCoreFunction->MNNConvInt8ComputeBiasFloat = MNNConvInt8ComputeBiasFloat_RVV;
+        gCoreFunction->MNNConvInt8ComputeWeightKernelSum = MNNConvInt8ComputeWeightKernelSum_RVV;
+#ifdef MNN_SUPPORT_TRANSFORMER_FUSE
+        gCoreFunction->MNNAttenPackAndScaleSingleHead = MNNAttenPackAndScaleSingleHead_RVV;
+        gCoreFunction->MNNFlashAttentionUpdateBlockOutput = MNNFlashAttentionUpdateBlockOutput_RVV;
+        gCoreFunction->MNNAttentionMaskQK = MNNAttentionMaskQK_RVV;
+#endif
 #ifdef MNN_CPU_WEIGHT_DEQUANT_GEMM
         gCoreFunction->MNNPackedMatMul_int8 = MNNPackedMatMul_int8_RVV;
         gCoreFunction->MNNPackedMatMulRemain_int8 = MNNPackedMatMulRemain_int8_RVV;

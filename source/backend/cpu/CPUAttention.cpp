@@ -845,7 +845,13 @@ ErrorCode CPUAttention::onExecute(const std::vector<Tensor*>& inputs, const std:
                 // 2. softmax scores, softmax src/dst shape: [kv_seq_len/mPack, seq_len, mPack]
                 {
                     if (mKeyQuantMode != KVQuantMode::Int8 || isLowerTriangular == false || sinksPtr != nullptr) {
-                        if (mBytes == 2) {
+                        if (mBytes == 4 && gcore->MNNAttentionMaskQK != nullptr) {
+                            const float* maskPtr = mask == nullptr ? nullptr : mask->host<float>();
+                            const size_t maskElementSize = mask == nullptr ? 0 : mask->elementSize();
+                            gcore->MNNAttentionMaskQK((float*)qkPacked, &mScale, seqLen, subKvSeqLen, mPack, kvSeqLen,
+                                                      i * mBlockKV, padSeqLength, sinksPtr, maskPtr, maskElementSize,
+                                                      (mKeyQuantMode == KVQuantMode::Int8), isLowerTriangular);
+                        } else if (mBytes == 2) {
                             _maskQK<FLOAT16_T>((float*)qkPacked, &mScale, seqLen, subKvSeqLen, mPack, kvSeqLen,
                                                i * mBlockKV, padSeqLength, sinksPtr, mask,
                                                (mKeyQuantMode == KVQuantMode::Int8), isLowerTriangular);
