@@ -407,3 +407,27 @@ apps/iOS/MNNLLMChat/MNNLLMiOS/LocalModel/Qwen2.5-Omni-3B-MNN
 # smoke models converted on the host by ./test_ci.sh local (sources are fetched
 # into /smoke_sources/, then MNNConvert writes the .caffe.mnn here)
 /resource/model/**/*.caffe.mnn
+
+# Local RVV experiments, reports, and generated artifacts
+/.codex_tmp/
+/CPUAttentionCPUConvolution_RVV_static_perf.patch
+/HPCA2027-2.1-granularity-decoupled-execution.md
+/RVV_optimization_opportunities.md
+/RVWEAVER_FULL_PAPER_AUDIT_2026-07-31.md
+/benchmark/run_rvv_channel_pack_static.sh
+/benchmark/rvv_channel_pack_standalone.cpp
+/benchmark/rvv_data_plan_3_3/
+/benchmark/rvv_granularity.rar
+/benchmark/rvv_granularity/
+/benchmark/rvv_installation_time/
+/benchmark/rvv_persistent_plan_cache/
+/benchmark/rvv_platform_metadata/
+/benchmark/rvv_selection_accuracy.rar
+/benchmark/rvv_selection_accuracy/
+/docs/hpca2027/
+/main_single_column.tex
+/output/
+/outputs/
+/results.rar
+/results/
+/tmp/
