@@ -7,6 +7,8 @@
 //
 #include <riscv_vector.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include "../../compute/Int8FunctionsOpt.h"
 
 void MNNFloat2Int8_RVV(const float* src, int8_t* dst, size_t sizeQuad, const float* scalep, ssize_t minValue,
                        ssize_t maxValue, const float* zeroPoint, ssize_t quanParamVec) {
@@ -47,6 +49,12 @@ void MNNFloat2Int8_RVV(const float* src, int8_t* dst, size_t sizeQuad, const flo
     vfloat32m2_t v_min = __riscv_vfmv_v_f_f32m2(minf, vl_template);
     vfloat32m2_t v_max = __riscv_vfmv_v_f_f32m2(maxf, vl_template);
 
+    // vfcvt.x.f.v uses the dynamic frm CSR. Set RMM explicitly because some
+    // deployed RVV GCC versions do not honor the intrinsic's _rm argument.
+    unsigned int previousFrm;
+    const unsigned int rmm = 4;
+    asm volatile("csrrw %0, frm, %1" : "=r"(previousFrm) : "r"(rmm) : "memory");
+
     // main loop
     size_t i = 0;
     while (i < total) {
@@ -60,6 +68,7 @@ void MNNFloat2Int8_RVV(const float* src, int8_t* dst, size_t sizeQuad, const flo
         vfloat32m2_t v_clamp = __riscv_vfmin_vv_f32m2(__riscv_vfmax_vv_f32m2(v_add, v_min, vl), v_max, vl);
 
         // float→int8
+        // MNN's generic CPU path uses roundf, whose tie rule is away from zero.
         vint32m2_t v_i32 = __riscv_vfcvt_x_f_v_i32m2(v_clamp, vl);
         vint16m1_t v_i16 = __riscv_vncvt_x_x_w_i16m1(v_i32, vl);
         vint8mf2_t v_i8 = __riscv_vncvt_x_x_w_i8mf2(v_i16, vl);
@@ -68,4 +77,5 @@ void MNNFloat2Int8_RVV(const float* src, int8_t* dst, size_t sizeQuad, const flo
 
         i += vl;
     }
+    asm volatile("csrw frm, %0" : : "r"(previousFrm) : "memory");
 }
