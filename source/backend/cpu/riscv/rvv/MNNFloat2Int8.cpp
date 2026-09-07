@@ -32,6 +32,32 @@ void MNNFloat2Int8_RVV(const float* src, int8_t* dst, size_t sizeQuad, const flo
     const float maxf = (float)maxValue;
     const size_t total = sizeQuad * 4;
 
+    // Both quantization paths must match roundf's ties-away-from-zero rule.
+    // Set frm explicitly for RVV compilers that do not honor the _rm argument.
+    unsigned int previousFrm;
+    const unsigned int rmm = 4;
+    asm volatile("csrrw %0, frm, %1" : "=r"(previousFrm) : "r"(rmm) : "memory");
+
+    if ((quanParamVec & 3) == 0) {
+        const float scale0 = scalep[0];
+        const float zero0 = zeroPoint[0];
+        size_t i = 0;
+        while (i < total) {
+            const size_t vl = __riscv_vsetvl_e32m2(total - i);
+            vfloat32m2_t v_src = __riscv_vle32_v_f32m2(src + i, vl);
+            vfloat32m2_t v_value = __riscv_vfmul_vf_f32m2(v_src, scale0, vl);
+            v_value = __riscv_vfadd_vf_f32m2(v_value, zero0, vl);
+            v_value = __riscv_vfmin_vf_f32m2(__riscv_vfmax_vf_f32m2(v_value, minf, vl), maxf, vl);
+            vint32m2_t v_i32 = __riscv_vfcvt_x_f_v_i32m2(v_value, vl);
+            vint16m1_t v_i16 = __riscv_vncvt_x_x_w_i16m1(v_i32, vl);
+            vint8mf2_t v_i8 = __riscv_vncvt_x_x_w_i8mf2(v_i16, vl);
+            __riscv_vse8_v_i8mf2(dst + i, v_i8, vl);
+            i += vl;
+        }
+        asm volatile("csrw frm, %0" : : "r"(previousFrm) : "memory");
+        return;
+    }
+
     // get vl，create scale/zero cyclic template
     // template by e32m1
     size_t vl_template = __riscv_vsetvlmax_e32m2();
@@ -48,12 +74,6 @@ void MNNFloat2Int8_RVV(const float* src, int8_t* dst, size_t sizeQuad, const flo
 
     vfloat32m2_t v_min = __riscv_vfmv_v_f_f32m2(minf, vl_template);
     vfloat32m2_t v_max = __riscv_vfmv_v_f_f32m2(maxf, vl_template);
-
-    // vfcvt.x.f.v uses the dynamic frm CSR. Set RMM explicitly because some
-    // deployed RVV GCC versions do not honor the intrinsic's _rm argument.
-    unsigned int previousFrm;
-    const unsigned int rmm = 4;
-    asm volatile("csrrw %0, frm, %1" : "=r"(previousFrm) : "r"(rmm) : "memory");
 
     // main loop
     size_t i = 0;
