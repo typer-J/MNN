@@ -7,6 +7,10 @@
 hwprobe 成功并报告 V。四函数正确性与性能尚未执行，因为旧入口的未验证 512 位默认预期触发了中止。
 新版入口不再猜测 VLEN，必须显式提供已测值；这些预检结果不代表全算子优化或模型加速完成。
 
+第二次回传日志已通过 VLEN 检查，但旧测试框架在生成 JSONL 前退出：参数检查错误拒绝了
+`target_riscv64_execution` 中的数字 `64`。该问题已在本机复现并修复；Python 入口同时补充真实退出码、
+信号和日志尾部的错误提示。已经上传旧包的用户需更新 `benchmark.cpp` 与 `run.py`，保留失败结果后重跑。
+
 ## 1. 需要复制哪些文件
 
 | 测试目的 | 需要上传的内容 | 启动方式 |
@@ -338,6 +342,7 @@ CXX="$GCC14_PREFIX/bin/g++" python3 benchmark/rvv_scalar_compare/run.py --correc
 | GDB不存在/ptrace被限制 | op结果可保留，派发记为未验证/受阻，不能声称四个入口已命中 |
 | `$'\r'` / bad interpreter / heredoc错误 | 换行被改变，重新上传未改动ZIP并核对源码hash |
 | 没有comparison.csv | correctness-only属正常；性能运行则查看是否提前失败 |
+| `results.jsonl` 不存在 | 查 `metadata.json` 的 `benchmark_exit_code` 和 `run.log`；旧版若因目标标签校验退出 2，更新 benchmark.cpp/run.py。结果文件应由程序生成，不要手动新建空文件 |
 | RVV比原标量慢 | 保留全部case数据，核对三进程、MAD与负载，再按实测热点调整实现或回退 |
 
 ## Technical reference: baseline and measurement details

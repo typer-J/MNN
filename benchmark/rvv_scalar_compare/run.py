@@ -12,6 +12,7 @@ import platform
 import re
 import shlex
 import shutil
+import signal
 import statistics
 import subprocess
 import sys
@@ -76,6 +77,45 @@ def run_command(command, log, cwd=None):
     if result.returncode:
         raise RuntimeError("Command failed (exit " + str(result.returncode) + "): " + Path(command[0]).name)
     return result.stdout
+
+
+def run_benchmark(command, recorded_command, log, out, metadata, save_metadata):
+    metadata["benchmark_command"] = recorded_command
+    save_metadata()
+    result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
+    metadata["benchmark_exit_code"] = result.returncode
+    description = "exit code " + str(result.returncode)
+    if os.name == "posix" and result.returncode < 0:
+        number = -result.returncode
+        try:
+            name = signal.Signals(number).name
+        except ValueError:
+            name = "unknown"
+        metadata["benchmark_signal"] = {"number": number, "name": name}
+        description += ", signal " + name + " (" + str(number) + ")"
+    metadata["benchmark_exit_description"] = description
+    log.flush()
+    # Preserve the real process outcome before reading or aggregating any artifacts.
+    save_metadata()
+    results_path = out / "results.jsonl"
+    if not results_path.is_file():
+        log_path = out / "run.log"
+        try:
+            with log_path.open("rb") as stream:
+                stream.seek(0, os.SEEK_END)
+                stream.seek(max(0, stream.tell() - 16000))
+                tail = stream.read().decode("utf-8", errors="replace")[-4000:]
+        except OSError as error:
+            tail = "[run.log unavailable: " + str(error) + "]"
+        metadata["status"] = "failed"
+        metadata["benchmark_log_tail"] = tail
+        metadata["benchmark_missing_artifact"] = "results.jsonl"
+        save_metadata()
+        raise RuntimeError("Benchmark did not produce results.jsonl (" + description + "). "
+                           "Command: " + json.dumps(recorded_command) + ". "
+                           "Evidence: " + str(out / "metadata.json") + "; log: " + str(log_path) +
+                           ". run.log tail (up to 4000 characters):\n" + (tail or "[empty]"))
+    return result
 
 
 def main():
@@ -249,8 +289,7 @@ def main():
                 command += ["--correctness-only"]
             if metadata.get("probe"):
                 command += ["--vlen-bits", str(metadata["probe"]["vlen_bits"])]
-            result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT)
-            metadata["benchmark_exit_code"] = result.returncode
+            result = run_benchmark(command, public_command(command), log, out, metadata, save_metadata)
         records = [json.loads(line) for line in (out / "results.jsonl").read_text().splitlines() if line.strip()]
         samples = [row for row in records if row["record"] == "sample"]
         if samples:
@@ -281,10 +320,12 @@ def main():
                 writer.writeheader()
                 writer.writerows(comparisons)
         check_sources()
-        metadata["status"] = "passed" if result.returncode == 0 else "failed"
         metadata["summary"] = next((row for row in reversed(records) if row["record"] == "summary"), None)
         if metadata["summary"] is None or metadata["summary"].get("cases", 0) == 0:
-            raise RuntimeError("Benchmark did not produce a nonempty completion summary")
+            raise RuntimeError("Benchmark did not produce a nonempty completion summary (" +
+                               metadata["benchmark_exit_description"] + "); evidence: " +
+                               str(out / "metadata.json") + "; log: " + str(out / "run.log"))
+        metadata["status"] = "passed" if result.returncode == 0 and metadata["summary"].get("failed", 0) == 0 else "failed"
         save_metadata()
         print(json.dumps({"status": metadata["status"], "evidence_tier": metadata["evidence_tier"],
                           "summary": metadata["summary"], "output": str(out)}))

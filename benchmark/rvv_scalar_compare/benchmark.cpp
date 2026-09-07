@@ -230,9 +230,10 @@ int main(int argc, char** argv) {
         const std::string arg = argv[i];
         if (arg == "--correctness-only")
             correctnessOnly = true;
-        else if (i + 1 >= argc)
+        else if (i + 1 >= argc) {
+            std::fprintf(stderr, "Missing value for argument: %s\n", arg.c_str());
             return 2;
-        else if (arg == "--jsonl")
+        } else if (arg == "--jsonl")
             output = argv[++i];
         else if (arg == "--rounds")
             rounds = std::atoi(argv[++i]);
@@ -244,13 +245,21 @@ int main(int argc, char** argv) {
             vlenBits = std::strtoul(argv[++i], nullptr, 10);
         else if (arg == "--evidence-tier")
             evidenceTier = argv[++i];
-        else
+        else {
+            std::fprintf(stderr, "Unknown argument: %s\n", arg.c_str());
             return 2;
+        }
     }
-    if (output.empty() || rounds < 2 || !std::isfinite(sampleMs) || sampleMs <= 0)
+    if (output.empty() || rounds < 2 || !std::isfinite(sampleMs) || sampleMs <= 0) {
+        std::fprintf(stderr, "Require --jsonl, --rounds >= 2, and finite --sample-ms > 0.\n");
         return 2;
-    if (evidenceTier.find_first_not_of("abcdefghijklmnopqrstuvwxyz_") != std::string::npos)
+    }
+    const bool knownTier = evidenceTier == "target_riscv64_execution" ||
+                           evidenceTier == "host_scalar_harness_check" || evidenceTier == "host_semantic_emulation";
+    if (!knownTier) {
+        std::fprintf(stderr, "Unknown --evidence-tier: %s\n", evidenceTier.c_str());
         return 2;
+    }
     if (!correctnessOnly && evidenceTier != "target_riscv64_execution") {
         std::fprintf(
             stderr,
@@ -258,8 +267,10 @@ int main(int argc, char** argv) {
         return 2;
     }
     std::ofstream stream(output.c_str());
-    if (!stream)
+    if (!stream) {
+        std::fprintf(stderr, "Cannot open JSONL output: %s\n", output.c_str());
         return 2;
+    }
     stream << std::setprecision(12);
     stream << "{\"record\":\"run\",\"evidence_tier\":\"" << evidenceTier << "\",\"vlen_bits\":" << vlenBits
            << ",\"seed\":" << seed << ",\"correctness_only\":" << (correctnessOnly ? "true" : "false") << "}\n";

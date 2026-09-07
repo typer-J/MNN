@@ -96,6 +96,14 @@ An exported source tree may intentionally omit `.git`. Treat Git provenance as
 optional evidence rather than a build prerequisite: record it as unavailable,
 continue to hash every scoped source and harness file, and never invent a
 commit identity for the copy.
+Test the exact target CLI protocol on the host as a separate parser contract,
+including evidence labels, before relying on host-only correctness runs. A
+host label can bypass a validation bug that rejects the real target label.
+Keep such contract checks separate from hardware evidence. Persist the child
+command and exit code before opening expected result files; if a child exits
+before creating JSONL, report its exit/signal and log tail rather than masking
+the cause with a missing-file error. Never create a placeholder result to pass
+the artifact check.
 
 Before aggregating cross-target results, establish a comparable cohort by
 checking the case-key set, compiler version and flags, and source/object hashes.
