@@ -1,6 +1,8 @@
+#include "MNNRvvC4Functions.hpp"
 #include <riscv_vector.h>
 
-void MNNScaleAndAddBias(float *dst, const float *src, const float *bias, const float *alpha, size_t planeNumber, size_t biasNumber) {
+void MNNScaleAndAddBias_RVV(float* dst, const float* src, const float* bias, const float* alpha, size_t planeNumber,
+                            size_t biasNumber) {
     const ptrdiff_t stride = 4 * sizeof(float);
 
     for (size_t z = 0; z < biasNumber; ++z) {

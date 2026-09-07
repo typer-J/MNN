@@ -1,6 +1,7 @@
+#include "MNNRvvC4Functions.hpp"
 #include <riscv_vector.h>
 
-void MNNUnpackC4(float* dst, const float* src, size_t area, size_t depth, int* areaOffset) {
+void MNNUnpackC4_RVV(float* dst, const float* src, size_t area, size_t depth, int* areaOffset) {
     const size_t srcAreaStride = (size_t)areaOffset[0];
     const size_t dstAreaStride = (size_t)areaOffset[1];
     const ptrdiff_t srcStrideBytes = 4 * (ptrdiff_t)sizeof(float);

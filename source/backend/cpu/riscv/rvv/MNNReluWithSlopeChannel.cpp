@@ -1,8 +1,7 @@
+#include "MNNRvvC4Functions.hpp"
 #include <riscv_vector.h>
 
-void MNNReluWithSlopeChannel(float *dst, const float *src, 
-                              const float *slope, size_t sizeQuad, 
-                              size_t depthQuad) {
+void MNNReluWithSlopeChannel_RVV(float* dst, const float* src, const float* slope, size_t sizeQuad, size_t depthQuad) {
     const ptrdiff_t stride = 4 * sizeof(float);
     
     for (size_t j = 0; j < depthQuad; ++j) {
