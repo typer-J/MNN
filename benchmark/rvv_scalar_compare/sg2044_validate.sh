@@ -10,11 +10,11 @@ Required environment:
   ORIGINAL_REPO   Original repository to protect; this checkout must be outside it.
   GCC14_PREFIX    Compiler prefix containing bin/g++ and bin/gcc; alternatively
                  set CXX to one compiler executable and optionally CC explicitly.
+  EXPECT_VLEN    Previously measured VLEN in bits. No chip-based default is used;
+                 the probe must match this value before correctness or timing.
 Optional environment:
   PYTHON=python3          Existing Python interpreter; no packages are installed.
   CPUSET                 Comma-separated allowed logical CPUs; default first allowed CPU.
-  EXPECT_VLEN=512        Expected VLEN in bits. The default is a hypothesis, not
-                        verified SG2044 identity; a measured mismatch stops the run.
   PERF_PROCESSES=3       Fresh performance processes after correctness passes.
   BENCH_ROUNDS=7         AB/BA rounds per case in each performance process.
   BENCH_SAMPLE_MS=1      Target calibration duration of the faster implementation.
@@ -169,7 +169,10 @@ try:
     summary["affinity_requested"] = requested or "first_allowed_cpu"
     summary["affinity_selected"] = selected
     context("preflight")
-    vlen = int(os.environ.get("EXPECT_VLEN", "512"))
+    expected_vlen = os.environ.get("EXPECT_VLEN")
+    if expected_vlen is None:
+        raise RuntimeError("Set EXPECT_VLEN to a previously measured VLEN in bits; no chip-based default is used")
+    vlen = int(expected_vlen)
     processes = int(os.environ.get("PERF_PROCESSES", "3"))
     rounds = int(os.environ.get("BENCH_ROUNDS", "7"))
     sample_ms = float(os.environ.get("BENCH_SAMPLE_MS", "1"))
@@ -178,7 +181,7 @@ try:
             or sample_ms <= 0 or skip_integration not in {"0", "1"}):
         raise RuntimeError("Invalid EXPECT_VLEN/PERF_PROCESSES/BENCH_ROUNDS/BENCH_SAMPLE_MS/SKIP_INTEGRATION")
     summary["expected_vlen_bits"] = vlen
-    summary["vlen_expectation_source"] = "caller" if "EXPECT_VLEN" in os.environ else "unverified_default_512"
+    summary["vlen_expectation_source"] = "caller"
     summary["performance_processes_requested"] = processes
     if os.environ.get("CXX"):
         compiler = shutil.which(os.environ["CXX"])

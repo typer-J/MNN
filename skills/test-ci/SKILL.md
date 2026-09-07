@@ -116,6 +116,12 @@ with a target intrinsic probe, compare it with an explicit expected value
 before the correctness or performance stage, and persist the expected value,
 measurement, and check status in metadata. A mismatch must fail the target run
 instead of producing evidence under the wrong platform name.
+Expected values must themselves have an evidence source. Do not ship a guessed
+VLEN as a board-named runner's default: use a separate discovery probe, then
+require its measured value explicitly for validation runs. If a run stops only
+because an unverified default disagrees with a successful probe, preserve that
+failure and correct the expectation from the observed target evidence; do not
+misreport it as a production-kernel correctness failure or a hardware defect.
 On a heterogeneous CPU, VLEN alone may not identify the intended cluster
 because multiple microarchitectures can implement the same vector length.
 Map logical CPUs to core models, pin both the probe and measured workload to an

@@ -2,8 +2,10 @@
 
 本目录测试 **PackC4、UnpackC4、ScaleAndAddBias、ReluWithSlopeChannel（逐通道 PReLU）**。
 当前候选修复了四个已有 RVV 函数的符号与函数表接入，实际生产实现与 MNN 原标量函数同进程对照。
-源码/脚本基线为 `e2dd1c98`，候选分支为 `codex/riscv-sg2044-first-pass`。
-**目前尚未取得 SG2044 实测结果**；下面是待执行步骤，不代表全算子优化或模型加速已完成。
+源码/脚本初始基线为 `e2dd1c98`，候选分支为 `codex/riscv-sg2044-first-pass`。
+用户回传的首次板端日志显示 GCC 14.4.0、标准库/线程程序及 RVV 探针通过，实测 VLEN 为 **128 位**，
+hwprobe 成功并报告 V。四函数正确性与性能尚未执行，因为旧入口的未验证 512 位默认预期触发了中止。
+新版入口不再猜测 VLEN，必须显式提供已测值；这些预检结果不代表全算子优化或模型加速完成。
 
 ## 1. 需要复制哪些文件
 
@@ -127,6 +129,33 @@ export CXX='/actual/path/to/riscv64-linux-gnu-g++'
 总入口的 CC/CXX 不接受附带 flags 的命令字符串。已设置的 `CXX` 优先于 `GCC14_PREFIX`。
 标准 prefix 配置块已清理旧变量；如果随后按非标准布局显式设置了 CC/CXX，后续运行时保留这两个变量。
 
+### 3.1 首次使用某台机器：先测 VLEN
+
+新版总入口要求 `EXPECT_VLEN`，不再提供从芯片名称推测的默认值。已有该目标的探针结果时直接使用实测值。
+尚未测量时，可以先编译并运行现有探针；以下代码只测 RVV/VLEN/hwprobe，不做性能测试，使用首个允许的 CPU：
+
+```bash
+probe_dir=$(mktemp -d)
+"${CXX:-$GCC14_PREFIX/bin/g++}" -O2 -std=c++11 -march=rv64gcv -mabi=lp64d \
+  benchmark/rvv_scalar_compare/probe.cpp -o "$probe_dir/rvv-probe"
+python3 - "$probe_dir/rvv-probe" <<'PY'
+import os, subprocess, sys
+cpu = min(os.sched_getaffinity(0))
+os.sched_setaffinity(0, {cpu})
+print('Probe logical CPU:', cpu, flush=True)
+subprocess.run([sys.argv[1]], check=True)
+PY
+```
+
+从探针 JSON 读取 `vlen_bits`，确认 `vector_fp32_probe_passed=true`。本次目标回传了 128，可在该目标设置：
+
+```bash
+export EXPECT_VLEN=128
+```
+
+后续总入口和各性能进程仍会独立复测，并与该值比较。128 是本次目标的观测值，不作为所有服务器的默认规格。
+旧小包也支持这个环境变量，因此已有小包无需重新上传即可按实测值重跑；保留原失败结果，使用新的结果目录。
+
 ## 4. 推荐：先跑最小包的函数级测试
 
 设置完上一节的环境变量，在候选根目录执行：
@@ -169,7 +198,7 @@ CPUSET=8 PERF_PROCESSES=3 BENCH_ROUNDS=7 BENCH_SAMPLE_MS=1 \
 
 | 参数 | 默认值 | 含义 |
 |---|---|---|
-| `EXPECT_VLEN` | `512` | VLEN 位数的预期值，必须由实际探针确认 |
+| `EXPECT_VLEN` | 必填 | 先前探针实测的 VLEN 位数；本次已观测目标使用 `128` |
 | `PERF_PROCESSES` | `3` | 新性能进程数 |
 | `BENCH_ROUNDS` | `7` | 每个 case 的交错测量轮数，至少 2 |
 | `BENCH_SAMPLE_MS` | `1` | 较快一侧单批次的目标校准时长，有限正数 |
@@ -180,7 +209,8 @@ CPUSET=8 PERF_PROCESSES=3 BENCH_ROUNDS=7 BENCH_SAMPLE_MS=1 \
 
 单核测速优先使用一个 CPU；多个 CPU 允许进程在集合内迁移。绑核不独占核心，脚本也不关闭其他任务或修改调频。
 负载、频率、温度记录是快照，不是持续监控或受控环境保证。高负载或波动较大时应保留本次数据，在稳定条件下复跑。
-默认 512 位是待验证预期；实测不匹配时先核对目标机器和 ISA，不能直接修改预期来掩盖不匹配。
+实测与先前观测不匹配时先核对目标机器、CPU 集合和 ISA，不能仅为继续测速而改值。
+旧脚本的 512 来源于未验证假设，应纠正为本次探针实际测得的值，不能据这个错误默认值认定硬件或内核有故障。
 
 ## 5. 完整源码：运行 MNN 集成回归
 
@@ -436,13 +466,13 @@ it requires `ORIGINAL_REPO` and refuses to write inside that existing checkout.
 Pass site paths through the environment:
 
 ```bash
-ORIGINAL_REPO=<existing-mnn-checkout> GCC14_PREFIX=<gcc14-install-prefix> \
+ORIGINAL_REPO=<existing-mnn-checkout> GCC14_PREFIX=<gcc14-install-prefix> EXPECT_VLEN=<measured-bits> \
   bash benchmark/rvv_scalar_compare/sg2044_validate.sh
 ```
 
-The default VLEN expectation is 512 bits. The target probe must confirm it;
-the default is an expectation, not measured hardware identity. Set `EXPECT_VLEN`
-only to an independently established value. `CPUSET` selects logical CPU IDs;
+`EXPECT_VLEN` is required and must come from a prior target probe; there is no
+chip-based default. The first returned target log measured 128 bits; the earlier
+unverified 512-bit default was incorrect for that target. `CPUSET` selects logical CPU IDs;
 without it the script selects an allowed CPU and records that choice. Pinning
 does not reserve a core or eliminate interference on a shared server.
 
