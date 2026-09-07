@@ -307,3 +307,10 @@ cmake --build build-sg2044-rvv -j <JOBS>
 
 本机语义模拟使用相同生产函数体和原标量函数体，覆盖尾通道、非连续 stride、原位 Scale/PReLU、
 正负零、subnormal、Inf、NaN 与保护区。实际目标机仍必须重跑，因为模拟不会验证指令实现、GCC 代码生成或硬件访存性能。
+
+板端提供 [一键验证入口](../benchmark/rvv_scalar_compare/sg2044_validate.sh) 与
+[完整 MNN 集成回归](../benchmark/rvv_scalar_compare/integration.sh)。入口先保护原 checkout、核实 GCC 14 与
+`<memory>`/RVV 探针，再跑函数级正确性、多个新进程性能对照及独立 scalar/RVV 构建。
+构建与运行的日志、退出码和原始数据保留在新结果目录；脚本已准备不代表板端阶段已执行。
+可用 GDB 的无计时回归用于检查四个 RVV 函数的实际命中；缺少该证据时必须保留“派发未验证”状态。
+运行方法见 [测试说明](../benchmark/rvv_scalar_compare/README.md#sg2044-validation-entrypoint)。

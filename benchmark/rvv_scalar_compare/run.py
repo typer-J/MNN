@@ -5,6 +5,7 @@ import csv
 import datetime
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -92,8 +93,8 @@ def main():
     parser.add_argument("--host-scalar-check", action="store_true",
                         help="Test harness and scalar contract locally; NO RVV execution or performance evidence")
     args = parser.parse_args()
-    if args.rounds < 2 or args.sample_ms <= 0 or args.expect_vlen < 0:
-        parser.error("rounds must be >=2, sample-ms >0, expect-vlen >=0")
+    if args.rounds < 2 or not math.isfinite(args.sample_ms) or args.sample_ms <= 0 or args.expect_vlen < 0:
+        parser.error("rounds must be >=2, sample-ms finite and >0, expect-vlen >=0")
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     out = (args.out or HERE / "results" / stamp).resolve()
     out.mkdir(parents=True, exist_ok=False)

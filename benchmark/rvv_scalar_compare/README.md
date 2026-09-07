@@ -114,3 +114,36 @@ without a compiler. A separate semantic-emulation driver can compile the
 production RVV source with an intrinsic shim and invoke the executable with
 `--correctness-only --vlen-bits <emulated-bits> --evidence-tier host_semantic_emulation`; label that result as emulation,
 not hardware execution.
+
+## SG2044 validation entrypoint
+
+`sg2044_validate.sh` orchestrates GCC 14 preflight, hardware/affinity recording,
+the correctness run, three fresh performance processes, and `integration.sh`
+for separate full MNN scalar/RVV builds. Run it from a fresh isolated checkout;
+it requires `ORIGINAL_REPO` and refuses to write inside that existing checkout.
+Pass site paths through the environment:
+
+```bash
+ORIGINAL_REPO=<existing-mnn-checkout> GCC14_PREFIX=<gcc14-install-prefix> \
+  bash benchmark/rvv_scalar_compare/sg2044_validate.sh
+```
+
+The default VLEN expectation is 512 bits. The target probe must confirm it;
+the default is an expectation, not measured hardware identity. Set `EXPECT_VLEN`
+only to an independently established value. `CPUSET` selects logical CPU IDs;
+without it the script selects an allowed CPU and records that choice. Pinning
+does not reserve a core or eliminate interference on a shared server.
+
+`PERF_PROCESSES` controls fresh benchmark processes (default 3). `JOBS` controls
+integration build parallelism (default 4). `SKIP_INTEGRATION=1` explicitly skips
+the full-library stage and is recorded as incomplete integration coverage.
+`CC`/`CXX` can name explicit executable paths if the installation does not use
+the usual `bin/gcc` and `bin/g++` layout. No toolchain or debugger is installed.
+
+The integration stage checks real test process exit codes and nonempty passing
+summaries for both variants. Its small op cases check integration correctness;
+they do not establish large-tensor scaling or model throughput. When an existing
+GDB is available, a separate untimed run checks the four RVV entrypoints. Model
+smoke tests still require representative local models and remain a separate
+validation stage. Review the raw results and per-case variance before accepting
+any speedup; script completion alone is not a performance acceptance decision.

@@ -247,7 +247,7 @@ int main(int argc, char** argv) {
         else
             return 2;
     }
-    if (output.empty() || rounds < 2 || sampleMs <= 0)
+    if (output.empty() || rounds < 2 || !std::isfinite(sampleMs) || sampleMs <= 0)
         return 2;
     if (evidenceTier.find_first_not_of("abcdefghijklmnopqrstuvwxyz_") != std::string::npos)
         return 2;

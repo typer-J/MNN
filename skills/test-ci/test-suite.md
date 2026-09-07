@@ -64,6 +64,11 @@ Valid filters: `all` (default) · `cpu` · `opencl` · `opencl-image` ·
   blank or truncated client response does not prove that the process exited.
   Write results on the device, then poll the process and result-file size
   before deciding whether the test completed.
+* An authenticated GUI terminal session does not prove that the available
+  automation tool can control that application. Check this capability before
+  relying on it as the test transport. If the tool explicitly blocks the app,
+  report the actual limitation and prepare a reviewed target-side command with
+  persistent logs and exit codes; do not treat command preparation as execution.
 
 ## Environment variables
 
