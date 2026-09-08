@@ -240,6 +240,12 @@ KV Cache 侧的优化（`kvUpdateConcurrent = true` 之类）必须分别验证 
 
 ## 九、标准 RVV 逐项检查表
 
+对按 C4 等固定周期重复系数的连续向量循环，不能假定 `vsetvl(remaining)` 总返回 VLMAX：
+当 VLMAX < AVL < 2×VLMAX 时，合法实现可能返回非 pack 倍数的 VL。若每轮都从系数周期起点开始，
+应显式将 AVL 限制到 VLMAX，并证明块长与尾块都是 pack 的倍数；否则要按已消费元素数更新系数相位。
+本机语义模拟应同时覆盖 maximal 与 balanced 两种合法 VL 选择，扩展寄存器的未定义 lane 应填充毒值，
+防止零初始化掩盖 gather 对未初始化 lane 的读取。
+
 写或改 `rvv/` 下的 kernel 时逐项过：
 
 - 运行时 `vlenb` 与本 kernel 的最低要求（§五）；

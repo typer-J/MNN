@@ -3,7 +3,7 @@
 本目录测试 **PackC4、UnpackC4、ScaleAndAddBias、ReluWithSlopeChannel（逐通道 PReLU）**。
 当前候选修复了四个已有 RVV 函数的符号与函数表接入，实际生产实现与 MNN 原标量函数同进程对照。
 源码/脚本初始基线为 `e2dd1c98`，候选分支为 `codex/riscv-sg2044-first-pass`。
-最新用户回传的 v2 板端日志使用 GCC 14.4.0，实测 VLEN 为 **128 位**，hwprobe 成功并报告 V：
+已收到并核验 v2 板端原始结果包，使用 GCC 14.4.0，实测 VLEN 为 **128 位**，hwprobe 成功并报告 V：
 
 | 阶段 | 回传摘要 |
 |---|---|
@@ -11,9 +11,16 @@
 | 三个独立性能进程 | 每个均为1320个配置、failed=0、18480条计时采样 |
 | 总入口 | passed；完整 MNN 集成显式跳过 |
 
-这是用户回传的终端摘要，原始结果包尚未收到。可以确认函数级检查及采样完成，**还不能给出加速比或判定性能收益**。
+原始结果包的外层 SHA256、源码快照、对象和执行文件哈希均已核验；四次执行使用同一二进制。
+结果显示收益取决于函数和尺寸：Pack/Unpack 多数配置受益，Scale 广泛退化，PReLU 小尺寸也退化。
+**passed 表示正确性和采样完成，不表示性能验收通过。** 原始数据与逐配置分析保留在本地结果目录。
 1320 是四函数的参数配置数，不是算子种类数；三个性能进程重复同一矩阵，每进程采样数为1320×7轮×2实现。
-其中220个零工作量配置不报告加速比。完整 MNN 派发、op/模型回归及端到端性能仍未验证。
+其中220个零工作量配置不报告加速比。目标进程固定 CPU 0，但系统负载较高且缺少温度记录；
+这些数字只代表本轮运行条件。完整 MNN 派发、op/模型回归及端到端性能仍未验证。
+
+当前下一版候选仅重写 `MNNScaleAndAddBias_RVV`：连续访存、每组复用通道系数，单 C4 直接运算。
+其他三个函数、原标量函数体和计时矩阵保持本轮版本。本机多 VLEN 语义模拟与目标静态编译已通过；
+**v2 结果属于旧的跨步 Scale 实现，不能用于证明新候选的正确性或加速。** 新候选仍需 GCC 14 目标复测。
 
 v2 源码基于 `d71f2a6b`，已修复旧版两个测试入口问题：未经验证的512位默认预期，以及错误拒绝
 `target_riscv64_execution` 中数字64的标签校验。旧包应更新对应入口/测试文件，保留失败记录再重跑；
@@ -453,6 +460,21 @@ reported speedup. No cross-case aggregate speedup is produced. A failure retains
 source hashes immediately before execution and after collection and rejects a
 cohort if production or harness source changed during the run. An archive
 without `.git` works; source hashes are the source identity.
+
+## 本地复算结果
+
+核对服务器 `.tar.gz.sha256` 后，将结果包安全解压到新目录。保留原始文件，再运行：
+
+```bash
+python3 benchmark/rvv_scalar_compare/analyze.py /path/to/session-directory \
+  --output /path/to/new-analysis-directory
+```
+
+分析器从 JSONL 重新计算中位数/MAD，与 `samples.csv`、`comparison.csv` 逐项核验，
+并检查退出状态、配置集合、源码/对象/二进制哈希以及进程间实验条件。
+结果包括 `cases.csv`（逐配置）、`by_function.csv`、`by_area.csv`、`analysis.json` 和 `summary.md`。
+零工作量配置不进入加速比；先在每个进程内求标量/RVV中位耗时比，再对同一配置取跨进程中位数。
+函数分组的几何均值是测试矩阵等权统计，不能视为模型提速；三进程一致的收益/退化分类也不是显著性检验。
 
 ## Host-only harness validation
 
