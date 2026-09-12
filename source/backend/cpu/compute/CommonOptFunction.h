@@ -589,7 +589,7 @@ struct CoreFunctions {
     const CPUExtension* extension = nullptr;
 };
 void MNNCoreFunctionInit();
-CoreFunctions* MNNGetCoreFunctions();
+MNN_PUBLIC CoreFunctions* MNNGetCoreFunctions();
 }; // namespace MNN
 
 #endif /* CommonOptFunction_h */
