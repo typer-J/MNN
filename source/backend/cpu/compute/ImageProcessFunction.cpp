@@ -7,6 +7,7 @@
 //
 
 #include "backend/cpu/compute/ImageProcessFunction.hpp"
+#include "backend/cpu/compute/CommonOptFunction.h"
 #include "core/Macro.h"
 #include <algorithm>
 #ifdef MNN_USE_NEON
@@ -42,6 +43,26 @@ void MNNRGBToBGR565Fast(const unsigned char* source, unsigned char* dest, size_t
 void MNNRGBAToBGRAFast(const unsigned char* source, unsigned char* dest, size_t count);
 void MNNRGBAToBGRFast(const unsigned char* source, unsigned char* dest, size_t count);
 }
+
+// The four RVV image kernels below have no CoreFunctions slot that the image
+// pipeline actually reads: the float blitters are picked by bare name from
+// ImageProcessUtils::choose(ImageFormat, int), and the C4 samplers are reached
+// through `coreFunctions->` only on the CV::ImageProcess path (the in-graph
+// CPUImageProcess op passes a null CoreFunctions and takes the bare name too).
+// So the RVV dispatch is inlined into the scalar bodies instead of relying on
+// the table, and the scalar body stays compiled unconditionally: a build with
+// MNN_USE_RVV=ON running on a CPU without the V extension still lands here.
+#ifdef MNN_USE_RVV
+extern void MNNC3ToFloatC3_RVV(const unsigned char* source, float* dest, const float* mean, const float* normal,
+                               size_t count);
+extern void MNNC3ToFloatRGBA_RVV(const unsigned char* source, float* dest, const float* mean, const float* normal,
+                                 size_t count);
+extern void MNNSamplerC4Nearest_RVV(const unsigned char* source, unsigned char* dest, MNN::CV::Point* points,
+                                    size_t sta, size_t count, size_t capacity, size_t iw, size_t ih, size_t yStride);
+extern void MNNSamplerC4Bilinear_RVV(const unsigned char* source, unsigned char* dest, MNN::CV::Point* points,
+                                     size_t sta, size_t count, size_t capacity, size_t iw, size_t ih,
+                                     size_t yStride);
+#endif
 
 #ifndef MNN_USE_RVV
 void MNNGRAYToC4(const unsigned char* source, unsigned char* dest, size_t count) {
@@ -600,6 +621,12 @@ void MNNC1ToFloatC1(const unsigned char* source, float* dest, const float* mean,
 
 void MNNC3ToFloatC3(const unsigned char* source, float* dest, const float* mean, const float* normal,
                              size_t count) {
+#ifdef MNN_USE_RVV
+    if (MNN::MNNGetCoreFunctions()->supportRVV) {
+        MNNC3ToFloatC3_RVV(source, dest, mean, normal, count);
+        return;
+    }
+#endif
 #ifdef MNN_USE_NEON
     int size              = (int)count / 16;
     float32x4x3_t cachell = {vmovq_n_f32(0), vmovq_n_f32(0), vmovq_n_f32(0)};
@@ -723,6 +750,12 @@ void MNNC1ToFloatRGBA(const unsigned char* source, float* dest, const float* mea
 }
 
 void MNNC3ToFloatRGBA(const unsigned char* source, float* dest, const float* mean, const float* normal, size_t count) {
+#ifdef MNN_USE_RVV
+    if (MNN::MNNGetCoreFunctions()->supportRVV) {
+        MNNC3ToFloatRGBA_RVV(source, dest, mean, normal, count);
+        return;
+    }
+#endif
 #ifdef MNN_USE_NEON
     MNNBlitC3ToFloatRGBA(source, dest, mean, normal, count);
 #else
@@ -832,6 +865,12 @@ static void _sampleCubicCommon(const unsigned char* source, unsigned char* dest,
 
 void MNNSamplerC4Bilinear(const unsigned char* source, unsigned char* dest, MNN::CV::Point* points, size_t sta,
                           size_t count, size_t capacity, size_t iw, size_t ih, size_t yStride) {
+#ifdef MNN_USE_RVV
+    if (MNN::MNNGetCoreFunctions()->supportRVV) {
+        MNNSamplerC4Bilinear_RVV(source, dest, points, sta, count, capacity, iw, ih, yStride);
+        return;
+    }
+#endif
 #ifdef MNN_USE_NEON
     MNNSamplerC4BilinearOpt(source, dest + 4 * sta, reinterpret_cast<float*>(points), count, iw - 1, ih - 1, yStride);
 #else
@@ -886,6 +925,12 @@ void MNNSamplerNearest(const unsigned char* source, unsigned char* dest, MNN::CV
 
 void MNNSamplerC4Nearest(const unsigned char* source, unsigned char* dest, MNN::CV::Point* points, size_t sta,
                          size_t count, size_t capacity, size_t iw, size_t ih, size_t yStride) {
+#ifdef MNN_USE_RVV
+    if (MNN::MNNGetCoreFunctions()->supportRVV) {
+        MNNSamplerC4Nearest_RVV(source, dest, points, sta, count, capacity, iw, ih, yStride);
+        return;
+    }
+#endif
 #ifdef MNN_USE_NEON
     MNNSamplerC4NearestOpt(source, dest + 4 * sta, (float*)points, count, iw - 1, ih - 1, yStride);
 #else
