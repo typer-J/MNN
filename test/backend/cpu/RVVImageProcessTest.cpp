@@ -181,7 +181,7 @@ public:
     }
 };
 
-MNNTestSuiteRegister(RVVImageProcessTest, "backend/cpu/rvv_image_process");
+MNNTestSuiteRegister(RVVImageProcessTest, "backend/cpu/rvv/image_process");
 
 #else
 
@@ -194,6 +194,6 @@ public:
     }
 };
 
-MNNTestSuiteRegister(RVVImageProcessTest, "backend/cpu/rvv_image_process");
+MNNTestSuiteRegister(RVVImageProcessTest, "backend/cpu/rvv/image_process");
 
 #endif
