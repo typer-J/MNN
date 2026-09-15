@@ -514,6 +514,7 @@ struct CoreFunctions {
                                        const float* bias, const float* parameters) = nullptr;
     void (*MNNReluWithSlopeChannel)(float* dst, const float* src, const float* slope, size_t sizeQuad,
                                     size_t depthQuad);
+    void (*MNNReluInt8)(int8_t* dst, const int8_t* src, size_t size, ssize_t zeroPoint);
     void (*MNNPoolingAvg)(const void* channelInput, int inputWidth, int inputHeight, void* channelOutput,
                           int outputWidth, int outputHeight, int kernelWidth, int kernelHeight, int strideWidth,
                           int strideHeight, int padWidth, int padHeight, int padType, int countType);
@@ -573,6 +574,10 @@ struct CoreFunctions {
                                                int bytes, int seqStart);
     void (*MNNSoftmax)(float* softmaxDst, const float* input, float* runningMax, float* runningSum, float* updateScale,
                        int outside, int reduceSize, int kvSeqOffset, int validOffset, int pack, bool mask);
+    void (*MNNAttentionMaskQK)(float* qkPacked, const float* scale, size_t seqLen, size_t processedKvSeq, int pack,
+                               int kvSeqLen, int kvoffset, int padKvSeqLen, const float* sinksPtr,
+                               const float* maskPtr, size_t maskElementSize, bool scaleApplied,
+                               bool isLowerTriangular) = nullptr;
     void (*MNNQuantAttentionKey)(int8_t* dst, const float* source, float* sumKey, float* maxKey, int32_t* params);
     void (*MNNQuantAttentionValue)(int8_t* dst, const float* source, float* valueQuantInfo, int32_t* params);
     void (*MNNRoPECompute)(void* dst, const void* src, const void* cosEven, const void* cosOdd, const void* sinEven,
@@ -584,7 +589,7 @@ struct CoreFunctions {
     const CPUExtension* extension = nullptr;
 };
 void MNNCoreFunctionInit();
-CoreFunctions* MNNGetCoreFunctions();
+MNN_PUBLIC CoreFunctions* MNNGetCoreFunctions();
 }; // namespace MNN
 
 #endif /* CommonOptFunction_h */
