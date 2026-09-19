@@ -250,7 +250,37 @@ KV Cache 侧的优化（`kvUpdateConcurrent = true` 之类）必须分别验证 
 - segment / strided load 是否真的匹配内存布局（而不是"看起来对"）；
 - unroll 之后 LMUL 是否导致寄存器溢出 / spill；
 - **主循环和 tail 是否读同一份 metadata**；
-- intrinsic、内联汇编与编译器自动向量化是否真的生成了预期指令（反汇编确认，别只看快了）。
+- intrinsic、内联汇编与编译器自动向量化是否真的生成了预期指令（反汇编确认，别只看快了）；
+- 新增文件的**导出符号 linkage** 与声明处一致（下方展开）；
+- **离开真机时至少过一遍目标编译器 `-fsyntax-only`** 加 `git diff --check`（下方展开）；
+- **可伸缩向量类型（sizeless）** 不能做结构体成员、数组元素或取地址保存（下方展开）；
+- **tail 属于哪一类**：length / layout-semantic / reduction finalization（下方展开）。
+
+**linkage 必须与声明处一致。** 若函数在 `CommonOptFunction.h` 的 `extern "C"` 区域内声明，
+架构专用 `.cpp` 里的替换实现也必须显式写 `extern "C"`；只有**仅**通过 `CoreFunctions`
+内部指针注册、从未在头文件对外声明的 `_RVV` helper，才可以保持普通 C++ linkage。
+混用会在链接期炸出未定义引用，或更糟——让另一侧悄悄链到错误符号上。
+
+**离开真机不等于放弃检查。** 每个新增的架构专用文件至少执行目标编译器 `-fsyntax-only`
+（RVV 用 `clang++ -target riscv64 -march=rv64gcv -mabi=lp64d`），再配合 `git diff --check`。
+这**不能**替代板上正确性与性能验证，但类型不匹配、头文件缺失、linkage 不一致这三类问题
+在宿主上就能拦下，不要等上了板才发现。RVV 的向量类型是 **sizeless type**：
+不能作为普通结构体成员、数组元素，也不能通过取地址保存状态——辅助函数应按值接收 / 返回
+向量累加器，模板向量保留为函数局部值。**即使宿主 fallback 已编译运行，也要用目标编译器对
+intrinsic-only 路径单独检查**；缺少目标 C++ sysroot 时，建一个只含目标 intrinsic 和原始指针的
+最小语法 harness，不能用宿主编译成功替代该检查。
+
+**tail 必须按语义分类。** 审计或优化可伸缩向量代码时，区分三类：
+
+| 类别 | 特征 | `setvl(remaining)` 能否统一 |
+|---|---|---|
+| length tail | 只改变 active lane 数 | 能 |
+| layout-semantic tail | 改变 pack / address mapping | **不能** |
+| reduction finalization | 归约收尾 | **不能** |
+
+**不得用 `setvl(remaining)` 声称消除了所有 remainder。** tail 优化的因果消融要保持
+full-vector body、输入和算法不变，只替换 scalar cleanup 与统一动态 `vl`，
+否则测出的差异无法归因到 tail 本身。
 
 `MNN_RVV_FAST_MATH=ON` 会给 `MNNRVV` 加 `-ffast-math`。**它会改变浮点语义**，
 做数值对照时先确认两侧这个开关一致，否则差异归因会跑偏。

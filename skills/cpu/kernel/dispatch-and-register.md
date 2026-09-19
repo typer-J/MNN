@@ -207,6 +207,7 @@ gInstance->int8MatmulRelatedFunctions.MNNPackC4Int8ForMatMul_A = gArm82CoreInt8F
 - 注册用的 getter 名（`MNNGetGemmUnitSdot` / `..._I8mm` / `..._Sme2_HP32` / `..._RVV`）与宏名（`GEMM_INT8_*_ARM82` / `_ARM86` / `_SME2`）是**两套独立命名**，靠 getter 名 grep 不到宏、反之亦然，找齐一档的所有落点要两个名字都搜。数值本身已由宏统一，见 `pack-and-abi.md` §2.1。
 - 「有 getter 就有路径」的推断不成立：确认一条路径是否活着，要 grep **赋值点**（`gCoreFunc->MNNGetGemmUnit = ...`）而不是定义点。
 - x86_64 侧的第二层不叫 `supportXxx` 而是 `AVX2Backend::isValid()`（`CPUBackend.cpp`）——**能力探测和 Backend 选择合并了**。而且 `MNN_CPU_USE_DEFAULT_BACKEND` 分支在 `isValid()` 之前 `break`，所以设了这个 flag 就永远拿不到 AVX2 路径。**三侧结构不同构，别互相套**——完整差异见 [`cpu/SKILL.md`](../SKILL.md)「三侧不同构对照表」。
+- **导出符号的 linkage 必须与声明处一致**：若函数在 `CommonOptFunction.h` 的 `extern "C"` 区域内声明，架构专用 `.cpp` 里的替换实现也必须显式写 `extern "C"`；只有**仅**通过 `CoreFunctions` 内部指针注册、从未在头文件对外声明的 `_RVV` / `_NEON` helper，才可以保持普通 C++ linkage。混用会在链接期炸出未定义引用，或更糟——让另一侧悄悄链到错误符号上。RVV 侧展开见 [`arch/riscv.md`](arch/riscv.md) §九。
 
 ---
 

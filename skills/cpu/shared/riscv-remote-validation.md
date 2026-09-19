@@ -77,6 +77,13 @@ RISC-V 侧的选项都声明在 `source/backend/cpu/riscv/CMakeLists.txt`（除 
   和多个 build 目录；机制与 macOS 侧的 `LC_RPATH` 陷阱同源，见
   [`build-test-and-benchmark.md`](build-test-and-benchmark.md) §六.4。
 
+**`__riscv_vector` 宏不能证明 intrinsic 可用。** 它只说明编译参数启用了 V 扩展，
+不代表当前 `riscv_vector.h` 提供了代码所需的 intrinsic 版本。正式测量前，用**最终的 `CXX`
+和 `CXXFLAGS`** 编译一个包含实际类型和函数（例如 `vfloat32m8_t`、`__riscv_vsetvlmax_e32m8`）
+的最小探针，同时记录 `command -v`、解析后的编译器真实路径与版本。
+冒烟与正式运行若分别用了 `c++` 和 `g++`，**必须先确认二者解析到同一工具链**——
+否则冒烟通过不能证明正式编译环境兼容。
+
 ## 三、正确性矩阵：按成本从低到高
 
 | 层级 | 必测内容 |
@@ -136,16 +143,29 @@ RISC-V 板上额外要做的：
 `lscpu` / runtime 报告的核心数与 VLEN（IME2 汇编要 VLENB=128）、TCM runtime/device 是否可用、
 当前 governor / 频率 / 负载、目标模型与量化配置。
 
-## 五、交付时必须交代的五件事
+## 五、交付时必须交代的七件事
 
-板端结论离开会话就只剩 commit body 和 CR 描述。这五条缺一条，review 者无法判断改动的适用范围：
+板端结论离开会话就只剩 commit body 和 CR 描述。这七条缺一条，review 者无法判断改动的适用范围：
 
 1. **改了哪三层里的哪几层，以及为什么不能只复用通用路径**；
 2. **哪些 shape / 量化格式真的命中新路径，哪些自动回退**——vendor fast path 的门禁很窄，
    不写清就会被当成「全场景提升」；
 3. **正确性和性能各跑了什么**（§三 / §四 的哪几层，多少个进程，什么线程档）；
 4. **纯 RVV OFF 变体是否验证过**——只证明 vendor 构建可用不算交付完成；
-5. **改完之后仍受计算、带宽还是同步限制**，以及是否存在目标板 / runtime / 模型条件。
+5. **改完之后仍受计算、带宽还是同步限制**，以及是否存在目标板 / runtime / 模型条件；
+6. **跨 VLEN / 跨批次的主张要附产物身份**（下方展开）；
+7. **区分实现覆盖、微基准收益与端到端收益**（下方展开）。
+
+**跨 VLEN 主张要有产物身份。** 记录运行时 VLEN、RVV/SVE 版本或 profile、编译器、flags、
+source revision、源码 SHA-256 和 binary/object SHA-256。revision **不能**识别未提交或未跟踪的
+源码差异；相同源码但不同产物只能证明 **source portability**。只有 ISA 编码与 ABI 兼容
+**且二进制哈希相同**时，才能声称 same-binary portability。跨平台性能以各平台内部的 speedup
+与稳定性为主，**不要用不同服务器的绝对时间直接推导 ISA 优劣**。
+
+**区分实现覆盖、微基准收益与端到端收益。** 汇报或写 motivation 时，先用系统约束说明缺口，
+再分别列出「已有实现」「已测函数级数据」「尚缺模型级证据」。
+**不得用已提交的 RVV kernel 数量代替性能结论**，也不得把 microbenchmark speedup 外推为
+session / module 的端到端收益；低于 1x 的回归项应作为方法设计的直接证据和验收约束。
 
 ## 六、日志与脱敏
 
