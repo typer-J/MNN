@@ -12,6 +12,14 @@
 #include "TestUtils.h"
 
 using namespace MNN::Express;
+
+// Direct-kernel regression test for the RVV blit kernels the raster dispatches
+// to. Declared here and called from BlitC4Test so the checks ride the default
+// run_test.out path; the definition lives in
+// test/backend/cpu/RVVBitcopyTest.cpp and compiles away on builds that are not
+// RISC-V + static + MNN_USE_RVV.
+bool MNNTestRVVBitcopyFunctions();
+
 class RasrerTest : public MNNTestCase {
 public:
     virtual ~RasrerTest() = default;
@@ -134,6 +142,12 @@ public:
         return true;
     }
     virtual bool run(int precision) {
+        // The raster is the only caller of the bitcopy kernels, so the
+        // direct-kernel regression rides this case rather than a new one.
+        if (MNNTestSuite::get()->pStaus.forwardType == MNN_FORWARD_CPU && !MNNTestRVVBitcopyFunctions()) {
+            FUNC_PRINT(1);
+            return false;
+        }
         ExecutorScope::Current()->lazyEval = false;
         auto res = _run(precision, false);
         if (!res) {
